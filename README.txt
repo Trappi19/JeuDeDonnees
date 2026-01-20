@@ -1,4 +1,5 @@
 python -m pip install numpy pandas openpyxl
+pip install pandas
 
 
 Lit la première feuille de ton Excel.
