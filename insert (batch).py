@@ -1,13 +1,26 @@
 import pandas as pd
 from pathlib import Path
 
-INPUT_FILE = Path("C:\\Mes données personnelles\\Mes documents persos\\CESI\\JeuDeDonnees\\observatoire_2025_clean.xlsx")
-OUT_SQL   = Path("C:\\Mes données personnelles\\Mes documents persos\\CESI\\JeuDeDonnees\\inserts_observatoire(batch).sql")
-BATCH_SIZE = 500  # nb de lignes par INSERT
 
+# ---------- CONFIG DE BASE ----------
+
+# Chemin vers ton Excel nettoyé
+INPUT_FILE = Path("C:\\Mes données personnelles\\Mes documents persos\\CESI\\JeuDeDonnees\\observatoire_2025_clean.xlsx")
+
+# Chemin du fichier SQL qui sera généré
+OUT_SQL   = Path("C:\\Mes données personnelles\\Mes documents persos\\CESI\\JeuDeDonnees\\inserts_observatoire(batch).sql")
+
+# Combien de lignes on met par INSERT (multi‑VALUES)
+BATCH_SIZE = 500  # nombre de lignes par INSERT
+
+
+# On charge l'Excel dans un DataFrame pandas
 df = pd.read_excel(INPUT_FILE, engine="openpyxl")
 
-# Renommage simplifié
+
+# ---------- RENOMMAGE DES COLONNES ----------
+
+# On renomme les colonnes pour avoir des noms plus simples à manipuler
 df = df.rename(columns={
     "Nom_Demarche": "Nom_Demarche",
     "ID_Demarche": "ID_Demarche",
@@ -34,54 +47,79 @@ df = df.rename(columns={
     "URL_Demarche": "URL_Demarche",
 })
 
-# Helpers SQL
+
+# ---------- FONCTIONS UTILITAIRES POUR FAIRE DU SQL ----------
+
 def sql_str(v):
+    # pd.isna gère NaN, None, etc. ; on traite aussi explicitement la string "nan"
     if pd.isna(v) or v == "nan":
         return "NULL"
+    # On convertit en str et on échappe les antislash et quotes simples
     s = str(v).replace("\\", "\\\\").replace("'", "''")
+    # On renvoie la valeur encadrée par des quotes simples
     return f"'{s}'"
+
 
 def sql_num(v):
     if pd.isna(v) or v == "nan":
         return "NULL"
+    # Pas de quotes, MariaDB interprète ça comme un nombre
     return str(v)
 
+
 def sql_date(v):
+    # Cas valeur manquante
     if pd.isna(v) or v == "nan":
         return "NULL"
+    # On prend la valeur en string, on supprime les espaces autour
     s = str(v).strip()
     if not s:
         return "NULL"
 
-    # Cas du type "08/04/2022 (périmée)" -> on garde que la partie date
-    # on prend les 10 premiers caractères qui ressemblent à une date
+    # Exemple typique : "08/04/2022 (périmée)" -> on garde juste "08/04/2022"
     s = s[:10]
 
-    # Essayer différents formats jour/mois/année
+    # On tente plusieurs formats de date courants
     for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
         try:
+            # Si la conversion marche avec ce format, on sort la date au format SQL
             d = pd.to_datetime(s, format=fmt)
-            return f"'{d.date()}'"
+            return f"'{d.date()}'"   # ex: '2022-04-08'
         except Exception:
+            # Si ça plante, on teste le format suivant
             continue
 
-    # Si vraiment illisible -> NULL (évite de péter l'INSERT)
+    # Si aucun format ne marche, on abandonne et on met NULL
     return "NULL"
 
 
+
+# ---------- GÉNÉRATION DES INSERTS SQL EN BATCHS ----------
+
+
+# Ici on va stocker toutes les lignes SQL sous forme de texte
 lines = []
 
-# ================= ministere (DISTINCT + batch) =================
+
+# =====================================================
+# 1) INSERTS POUR LA TABLE ministere (DISTINCT + BATCH)
+# =====================================================
+
 lines.append("-- INSERTS ministere\n")
 
-ministere_map = {}
-next_min_id = 1
-ministere_values = []
+# Dictionnaire pour ne pas insérer 50 fois le même ministère
+ministere_map = {}   # (Perimetre, Ministere, Ref_Administration) -> id_ministere
+next_min_id = 1      # compteur pour générer id_ministere à la main
+ministere_values = []  # liste des tuples SQL "(..., ..., ...)"
 
+
+# On parcourt toutes les lignes de l'Excel
 for _, row in df.iterrows():
     key = (row["Perimetre"], row["Ministere"], row["Ref_Administration"])
+    # Si un des trois est NaN -> on skip
     if any(pd.isna(k) for k in key):
         continue
+    # Si ce combo de ministère n'a pas encore été vu, on lui donne un id
     if key not in ministere_map:
         ministere_map[key] = next_min_id
         per, min_pol, ref = key
@@ -90,6 +128,7 @@ for _, row in df.iterrows():
         )
         next_min_id += 1
 
+# On découpe la liste en batchs et on fait des gros INSERT multi-VALUES
 for i in range(0, len(ministere_values), BATCH_SIZE):
     batch = ministere_values[i:i+BATCH_SIZE]
     lines.append(
@@ -97,18 +136,25 @@ for i in range(0, len(ministere_values), BATCH_SIZE):
         + ",\n  ".join(batch) + ";"
     )
 
-# ================= demarche (batch) =================
+
+# ========================================
+# 2) INSERTS POUR LA TABLE demarche (BATCH)
+# ========================================
+
 lines.append("\n-- INSERTS demarche\n")
 
 demarche_values = []
 
 for _, row in df.iterrows():
+    # Si pas d'ID de démarche, on ignore la ligne
     if pd.isna(row["ID_Demarche"]):
         continue
 
+    # On retrouve l'id_ministere correspondant à cette ligne
     key = (row["Perimetre"], row["Ministere"], row["Ref_Administration"])
     id_min = ministere_map.get(key, "NULL")
 
+    # On fabrique la ligne VALUES (...) complète pour cette démarche
     val = (
         f"({int(row['ID_Demarche'])}, "
         f"{sql_str(row['Nom_Demarche'])}, "
@@ -134,6 +180,7 @@ for _, row in df.iterrows():
     )
     demarche_values.append(val)
 
+# On envoie les demarches en batchs
 for i in range(0, len(demarche_values), BATCH_SIZE):
     batch = demarche_values[i:i+BATCH_SIZE]
     lines.append(
@@ -147,13 +194,17 @@ for i in range(0, len(demarche_values), BATCH_SIZE):
         + ",\n  ".join(batch) + ";"
     )
 
-# ================= categorieusager + demarche_categorieusager =================
+
+# ===========================================================
+# 3) INSERTS categorieusager + demarche_categorieusager (BATCH)
+# ===========================================================
+
 lines.append("\n-- INSERTS categorieusager & demarche_categorieusager\n")
 
-cat_map = {}
+cat_map = {}     # libelle -> id_categorie
 next_cat_id = 1
-cat_values = []
-link_values = []
+cat_values = []   # pour remplir categorieusager
+link_values = []  # pour remplir demarche_categorieusager
 
 for _, row in df.iterrows():
     if pd.isna(row["ID_Demarche"]):
@@ -162,17 +213,21 @@ for _, row in df.iterrows():
     cats = row["Categories_Usagers"]
     if pd.isna(cats):
         continue
+    # Plusieurs catégories possibles séparées par ";"
     for raw in str(cats).split(";"):
         lib = raw.strip()
         if not lib:
             continue
+        # On crée l'entrée dans categorieusager si besoin
         if lib not in cat_map:
             cat_map[lib] = next_cat_id
             cat_values.append(f"({next_cat_id}, {sql_str(lib)})")
             next_cat_id += 1
         id_cat = cat_map[lib]
+        # Et la relation dans demarche_categorieusager
         link_values.append(f"({dem_id}, {id_cat})")
 
+# Batch d'INSERT dans categorieusager
 for i in range(0, len(cat_values), BATCH_SIZE):
     batch = cat_values[i:i+BATCH_SIZE]
     lines.append(
@@ -180,6 +235,7 @@ for i in range(0, len(cat_values), BATCH_SIZE):
         + ",\n  ".join(batch) + ";"
     )
 
+# Batch d'INSERT dans demarche_categorieusager
 for i in range(0, len(link_values), BATCH_SIZE):
     batch = link_values[i:i+BATCH_SIZE]
     lines.append(
@@ -187,7 +243,11 @@ for i in range(0, len(link_values), BATCH_SIZE):
         + ",\n  ".join(batch) + ";"
     )
 
-# ================= indicateursaccessibilite =================
+
+# ======================================
+# 4) INSERTS indicateursaccessibilite
+# ======================================
+
 lines.append("\n-- INSERTS indicateursaccessibilite\n")
 
 ind_values = []
@@ -204,6 +264,7 @@ for _, row in df.iterrows():
         f"{sql_num(row['Score_DLNUF'])})"
     )
 
+# Batch d'INSERT
 for i in range(0, len(ind_values), BATCH_SIZE):
     batch = ind_values[i:i+BATCH_SIZE]
     lines.append(
@@ -212,6 +273,9 @@ for i in range(0, len(ind_values), BATCH_SIZE):
         ") VALUES\n  "
         + ",\n  ".join(batch) + ";"
     )
+
+
+# ---------- ÉCRITURE DU FICHIER .SQL FINAL ----------
 
 OUT_SQL.write_text("\n".join(lines), encoding="utf-8")
 print("✅ Fichier SQL généré :", OUT_SQL.resolve())
