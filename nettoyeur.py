@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 
-# === PARAMÈTRES À ADAPTER SI BESOIN ===
+# Configuration
 SHEET_NAME = 0   # 0 = première feuille, ou "NomDeFeuille"
 INPUT_FILE = r"C:\Mes données personnelles\Mes documents persos\CESI\JeuDeDonnees\observatoire-2-edition-11-octobre-2025-.xlsx"
 OUTPUT_FILE = r"C:\Mes données personnelles\Mes documents persos\CESI\JeuDeDonnees\observatoire_2025_clean.xlsx"
@@ -70,6 +70,8 @@ for col in df.columns:
 
 # 7) Sauvegarde en Excel propre (et/ou CSV)
 df.to_excel(OUTPUT_FILE, index=False)
+
+# Sauvegarde en CSV si besoin
 # df.to_csv("observatoire_2025_clean.csv", index=False, encoding="utf-8")
 
 print(f"\n✅ Fichier nettoyé sauvegardé : {os.path.abspath(OUTPUT_FILE)}")
