@@ -248,31 +248,31 @@ for i in range(0, len(link_values), BATCH_SIZE):
 # 4) INSERTS indicateursaccessibilite
 # ======================================
 
-lines.append("\n-- INSERTS indicateursaccessibilite\n")
+# lines.append("\n-- INSERTS indicateursaccessibilite\n")
 
-ind_values = []
+# ind_values = []
 
-for _, row in df.iterrows():
-    if pd.isna(row["ID_Demarche"]):
-        continue
-    dem_id = int(row["ID_Demarche"])
-    ind_values.append(
-        f"({dem_id}, "
-        f"{sql_str(row['Prise_en_compte_Handicap'])}, "
-        f"{sql_num(row['Taux_Audit_RGAA'])}, "
-        f"{sql_str(row['FranceConnect'])}, "
-        f"{sql_num(row['Score_DLNUF'])})"
-    )
+# for _, row in df.iterrows():
+#     if pd.isna(row["ID_Demarche"]):
+#         continue
+#     dem_id = int(row["ID_Demarche"])
+#     ind_values.append(
+#         f"({dem_id}, "
+#         f"{sql_str(row['Prise_en_compte_Handicap'])}, "
+#         f"{sql_num(row['Taux_Audit_RGAA'])}, "
+#         f"{sql_str(row['FranceConnect'])}, "
+#         f"{sql_num(row['Score_DLNUF'])})"
+#     )
 
-# Batch d'INSERT
-for i in range(0, len(ind_values), BATCH_SIZE):
-    batch = ind_values[i:i+BATCH_SIZE]
-    lines.append(
-        "INSERT INTO indicateursaccessibilite (\n"
-        "  id_demarche, prise_en_compte_handicap, taux_audit_rgaa, franceconnect, score_dlnuf\n"
-        ") VALUES\n  "
-        + ",\n  ".join(batch) + ";"
-    )
+# # Batch d'INSERT
+# for i in range(0, len(ind_values), BATCH_SIZE):
+#     batch = ind_values[i:i+BATCH_SIZE]
+#     lines.append(
+#         "INSERT INTO indicateursaccessibilite (\n"
+#         "  id_demarche, prise_en_compte_handicap, taux_audit_rgaa, franceconnect, score_dlnuf\n"
+#         ") VALUES\n  "
+#         + ",\n  ".join(batch) + ";"
+#     )
 
 
 # ---------- ÉCRITURE DU FICHIER .SQL FINAL ----------

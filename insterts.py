@@ -33,7 +33,6 @@ df = df.rename(columns={
     "URL_Demarche": "URL_Demarche"
 })
 
-# Helpers SQL
 def sql_str(v):
     if pd.isna(v) or v == "nan":
         return "NULL"
@@ -148,23 +147,23 @@ for _, row in df.iterrows():
         )
 
 # 4) indicateursaccessibilite (facultatif : si tu l’utilises)
-lines.append("\n-- INSERTS pour indicateursaccessibilite\n")
+# lines.append("\n-- INSERTS pour indicateursaccessibilite\n")
 
-for _, row in df.iterrows():
-    if pd.isna(row["ID_Demarche"]):
-        continue
-    dem_id = int(row["ID_Demarche"])
-    lines.append(
-        "INSERT INTO indicateursaccessibilite("
-        "id_demarche, prise_en_compte_handicap, taux_audit_rgaa, franceconnect, score_dlnuf"
-        ") VALUES ("
-        f"{dem_id}, "
-        f"{sql_str(row['Prise_en_compte_Handicap'])}, "
-        f"{sql_num(row['Taux_Audit_RGAA'])}, "
-        f"{sql_str(row['FranceConnect'])}, "
-        f"{sql_num(row['Score_DLNUF'])}"
-        ");"
-    )
+# for _, row in df.iterrows():
+#     if pd.isna(row["ID_Demarche"]):
+#         continue
+#     dem_id = int(row["ID_Demarche"])
+#     lines.append(
+#         "INSERT INTO indicateursaccessibilite("
+#         "id_demarche, prise_en_compte_handicap, taux_audit_rgaa, franceconnect, score_dlnuf"
+#         ") VALUES ("
+#         f"{dem_id}, "
+#         f"{sql_str(row['Prise_en_compte_Handicap'])}, "
+#         f"{sql_num(row['Taux_Audit_RGAA'])}, "
+#         f"{sql_str(row['FranceConnect'])}, "
+#         f"{sql_num(row['Score_DLNUF'])}"
+#         ");"
+#     )
 
 OUT_SQL.write_text("\n".join(lines), encoding="utf-8")
 print("✅ Fichier SQL généré :", OUT_SQL.resolve())
